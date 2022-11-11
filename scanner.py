@@ -10,7 +10,7 @@ from enum import IntEnum
 from ctypes import Structure, c_ubyte, c_uint32, c_ushort
 
 
-SUBNET = "192.168.0.0/24"
+SUBNET = "192.168.1.0/24"
 MAGIC_MSG = 'PYTHONRULES!'
 
 
@@ -60,10 +60,11 @@ class IP(Structure):
         self.src_address = socket.inet_ntoa(struct.pack("<L", self.src))
         self.dst_address = socket.inet_ntoa(struct.pack("<L", self.dst))
         
-        try:
-            self.protocol = Protocol(self.protocol_num).name
-        except ValueError:
-            self.protocol = str(self.protocol_num)
+        self._protocol = Protocol(self.protocol_num)
+            
+    @property
+    def protocol(self):
+        return self._protocol
 
 
 class UDPSender:
@@ -101,7 +102,7 @@ class Sniffer:
             socket_protocol = socket.IPPROTO_ICMP
             
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket_protocol)
-        self._sock.bind((host, 0))
+        self._sock.bind((host, 1))
         
         self._sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
 
@@ -117,15 +118,17 @@ class Sniffer:
             message_len = len(MAGIC_MSG)
             print('Sniffing was started.')
             while True:
-                buff = self._sock.recvfrom(65535)[0]
-                # if message_as_bytes in buff:
-                #     print(buff)
-                ip_header = IP(buff[:20])
+                data = self._sock.recvfrom(65535)
+                buff = data[0]
+                ip_header = IP(buff[:24])
                 
-                if ip_header.protocol == 'ICMP':
-                    # print(f"[{ip_header.protocol}] {ip_header.src_address} -> {ip_header.dst_address}")
+                
+                if ip_header.protocol == Protocol.ICMP:
+                    print(f"[{ip_header.protocol.name}] {ip_header.src_address} -> {ip_header.dst_address}")
                     # print(f"Version: {ip_header.version}")
                     # print(f"Header Length: {ip_header.ihl}")
+                    # if message_as_bytes in buff:
+                    #     pass
                     
                     offset = ip_header.ihl * 4
                     icmp_buff = buff[offset:offset + 8]
@@ -156,7 +159,7 @@ if __name__ == "__main__":
     if len(sys.argv) == 2:
         host = sys.argv[1]
     else:
-        host = '192.168.0.5'
+        host = '192.168.1.120'
 
     sniffer = Sniffer(host)
     sender = UDPSender()
